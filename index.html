@@ -11,7 +11,6 @@ body { font-family: Arial; padding: 12px; }
 button, select, input { width: 100%; padding: 12px; margin: 6px 0; }
 video { width: 100%; }
 #reader { width: 100%; }
-small { color: gray; }
 </style>
 </head>
 
@@ -45,17 +44,15 @@ small { color: gray; }
 
 <script>
 
-const SCRIPT_URL = "https://script.google.com/a/macros/shopeemobile-external.com/s/AKfycbx-UDv7hTjkieUmIzX_9K1uoG76MzECrmjQcPRbZ0W4VxosMKSBU7H2OPUiUJFuaxit/exec";
+const SCRIPT_URL = https://script.google.com/a/macros/shopeemobile-external.com/s/AKfycbx-UDv7hTjkieUmIzX_9K1uoG76MzECrmjQcPRbZ0W4VxosMKSBU7H2OPUiUJFuaxit/exec";
 
-// ================= IndexedDB =================
+// ---------------- IndexedDB ----------------
 
 const DB_NAME = "damage_queue";
 let db;
 
 function openDB() {
-
-  return new Promise((resolve, reject) => {
-
+  return new Promise((resolve) => {
     const req = indexedDB.open(DB_NAME, 1);
 
     req.onupgradeneeded = e => {
@@ -67,74 +64,47 @@ function openDB() {
       db = e.target.result;
       resolve(db);
     };
-
-    req.onerror = reject;
-
   });
-
 }
 
-// ================= DB HELPERS =================
-
-function addToDB(item) {
-
+function addDB(item) {
   const tx = db.transaction("queue", "readwrite");
   tx.objectStore("queue").add(item);
-
 }
 
-function getAll() {
-
+function getAllDB() {
   return new Promise(resolve => {
-
     const tx = db.transaction("queue", "readonly");
     const req = tx.objectStore("queue").getAll();
-
     req.onsuccess = () => resolve(req.result);
-
   });
-
 }
 
-function deleteItem(id) {
-
+function deleteDB(id) {
   const tx = db.transaction("queue", "readwrite");
   tx.objectStore("queue").delete(id);
-
 }
 
-// ================= STATE =================
+// ---------------- STATE ----------------
 
 let scanner;
 let recorder;
 let stream;
 let chunks = [];
-let recordedBlob = null;
+let blob = null;
 let uploading = false;
 
-// ================= INIT =================
+// ---------------- INIT ----------------
 
-openDB().then(() => {
-  processQueue();
-  refreshUI();
-});
+openDB().then(processQueue);
 
-// ================= UI =================
+// ---------------- UI ----------------
 
-function setStatus(msg) {
-  document.getElementById("status").innerText = msg;
+function setStatus(t) {
+  document.getElementById("status").innerText = t;
 }
 
-async function refreshUI() {
-
-  const q = await getAll();
-
-  document.getElementById("queueInfo").innerText =
-    "Pending uploads: " + q.length;
-
-}
-
-// ================= BARCODE =================
+// ---------------- BARCODE ----------------
 
 function scanBarcode() {
 
@@ -142,37 +112,29 @@ function scanBarcode() {
 
   scanner = new Html5Qrcode("reader");
 
-  Html5Qrcode.getCameras().then(cameras => {
+  Html5Qrcode.getCameras().then(cams => {
 
-    const camId = cameras[cameras.length - 1].id;
+    const cam = cams[cams.length - 1].id;
 
-    scanner.start(
-      camId,
-      { fps: 10, qrbox: 250 },
-      text => {
+    scanner.start(cam, { fps: 10, qrbox: 250 }, text => {
 
-        document.getElementById("barcode").value = text;
+      document.getElementById("barcode").value = text;
 
-        scanner.stop();
-        document.getElementById("reader").innerHTML = "";
+      scanner.stop();
+      document.getElementById("reader").innerHTML = "";
 
-      }
-    );
+    });
 
   });
 
 }
 
-// ================= RECORD =================
+// ---------------- RECORD ----------------
 
 async function startRecording() {
 
   stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "environment",
-      width: { ideal: 640 },
-      height: { ideal: 480 }
-    },
+    video: { facingMode: "environment", width: 640, height: 480 },
     audio: true
   });
 
@@ -192,19 +154,17 @@ async function startRecording() {
   setStatus("Recording...");
 }
 
-// ================= STOP =================
-
 function stopRecording() {
 
   return new Promise(resolve => {
 
     recorder.onstop = () => {
 
-      recordedBlob = new Blob(chunks, { type: "video/webm" });
+      blob = new Blob(chunks, { type: "video/webm" });
 
       stream.getTracks().forEach(t => t.stop());
 
-      setStatus("Ready to save");
+      setStatus("Ready");
 
       resolve();
     };
@@ -214,57 +174,63 @@ function stopRecording() {
 
 }
 
-// ================= SAVE =================
+// ---------------- SAVE ----------------
 
 async function save() {
 
   const barcode = document.getElementById("barcode").value;
   const parent = document.getElementById("parent").value;
 
-  if (!barcode || !recordedBlob) {
-    alert("Missing data");
-    return;
-  }
+  if (!barcode || !blob) return alert("Missing data");
 
-  addToDB({
+  addDB({
     barcode,
     parent,
-    blob: recordedBlob,
+    blob,
     retries: 0,
     time: Date.now()
   });
 
-  recordedBlob = null;
-
+  blob = null;
   document.getElementById("barcode").value = "";
 
-  setStatus("Saved locally ✔");
+  setStatus("Saved ✔");
 
-  refreshUI();
-
-  processQueue(); // auto upload
+  processQueue();
 }
 
-// ================= UPLOAD =================
+// ---------------- BASE64 ----------------
+
+function blobToBase64(blob) {
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result.split(",")[1]);
+    r.readAsDataURL(blob);
+  });
+}
+
+// ---------------- UPLOAD ----------------
 
 async function uploadItem(item) {
 
-  const form = new FormData();
-
-  form.append("file", item.blob, "Unboxing.mp4");
-  form.append("barcode", item.barcode);
-  form.append("parent", item.parent);
+  const base64 = await blobToBase64(item.blob);
 
   const res = await fetch(SCRIPT_URL, {
     method: "POST",
-    body: form
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      barcode: item.barcode,
+      parent: item.parent,
+      file: base64
+    })
   });
 
-  if (!res.ok) throw new Error("Upload failed");
+  const text = await res.text();
 
+  if (text !== "OK") throw new Error(text);
 }
 
-// ================= QUEUE ENGINE =================
+// ---------------- QUEUE ENGINE ----------------
 
 async function processQueue() {
 
@@ -273,8 +239,7 @@ async function processQueue() {
 
   while (true) {
 
-    const items = await getAll();
-
+    const items = await getAllDB();
     if (items.length === 0) break;
 
     const item = items[0];
@@ -285,37 +250,25 @@ async function processQueue() {
 
       await uploadItem(item);
 
-      deleteItem(item.id);
+      deleteDB(item.id);
 
       setStatus("Uploaded ✔");
 
-      refreshUI();
-
-      await new Promise(r => setTimeout(r, 400));
-
-    } catch (err) {
+    } catch (e) {
 
       item.retries++;
 
-      console.log(err);
-
       if (item.retries > 5) {
-
-        deleteItem(item.id);
-
+        deleteDB(item.id);
         setStatus("Dropped failed item");
-
       } else {
-
         await new Promise(r => setTimeout(r, 2000 * item.retries));
-
       }
     }
   }
 
   uploading = false;
-
-  setStatus("Idle ✔");
+  setStatus("Idle");
 }
 
 </script>
