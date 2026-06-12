@@ -1,6 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
+<script src="https://unpkg.com/html5-qrcode"></script>
+  <script>
+
+let scanner;
+
+function scanBarcode() {
+
+  document
+    .getElementById("reader")
+    .innerHTML = "";
+
+  scanner =
+    new Html5Qrcode("reader");
+
+  Html5Qrcode.getCameras()
+    .then(cameras => {
+
+      if (!cameras.length) {
+
+        alert("No camera found");
+
+        return;
+
+      }
+
+      const cameraId =
+        cameras[cameras.length - 1].id;
+
+      scanner.start(
+        cameraId,
+        {
+          fps:10,
+          qrbox:250
+        },
+        decodedText => {
+
+          document
+            .getElementById("barcode")
+            .value =
+            decodedText;
+
+          scanner.stop();
+
+          document
+            .getElementById("reader")
+            .innerHTML = "";
+
+        }
+      );
+
+    });
+
+}
+
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Damage Recorder</title>
@@ -28,49 +83,25 @@ video{
 
 <h2>Damage Recorder</h2>
 
-<button onclick="startCamera()">
-Start Camera
+<select id="parent">
+  <option value="1">Damage Form [1]</option>
+  <option value="2">Damage Form [2]</option>
+</select>
+
+<br><br>
+
+<input
+  id="barcode"
+  readonly
+  placeholder="Scan barcode first">
+
+<br><br>
+
+<button onclick="scanBarcode()">
+  Scan Barcode
 </button>
 
-<video
-  id="preview"
-  autoplay
-  playsinline>
-</video>
-
-<script>
-
-async function startCamera() {
-
-  try {
-
-    const stream =
-      await navigator.mediaDevices
-      .getUserMedia({
-        video:{
-          facingMode:"environment"
-        },
-        audio:true
-      });
-
-    document
-      .getElementById("preview")
-      .srcObject = stream;
-
-  }
-
-  catch(err) {
-
-    alert(
-      err.name + "\n" +
-      err.message
-    );
-
-  }
-
-}
-
-</script>
+<div id="reader"></div>
 
 </body>
 </html>
