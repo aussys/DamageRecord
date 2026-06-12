@@ -1,1 +1,9 @@
 
+{
+  "name": "Damage Recorder",
+  "short_name": "Damage",
+  "display": "standalone",
+  "start_url": "./",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff"
+}
