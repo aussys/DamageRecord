@@ -209,8 +209,9 @@ document.getElementById("uploadBtn").onclick=async()=>{
      const base64=e.target.result.split(",")[1];
 
      const response=await fetch(SCRIPT_URL,{
-       method:"POST",
-       body:JSON.stringify({
+  method:"POST",
+  mode:"no-cors",
+  body:JSON.stringify({
          folder:folderSelect.value,
          folderName:folderName.value.trim(),
          fileName:"Video.webm",
@@ -219,15 +220,9 @@ document.getElementById("uploadBtn").onclick=async()=>{
        })
      });
 
-     const result=await response.json();
-
-     progress.value=100;
-
-     if(result.success){
-       statusDiv.innerHTML="✅ Uploaded";
-     }else{
-       statusDiv.innerHTML="❌ "+result.error;
-     }
+progress.value=100;
+statusDiv.innerHTML=
+"✅ Upload sent. Check Google Drive.";
 
    }catch(err){
      statusDiv.innerHTML="❌ Upload failed: "+err.message;
