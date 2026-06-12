@@ -1,356 +1,379 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Damage Upload Form</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Damage Upload</title>
 
 <style>
-*{
-    box-sizing:border-box;
-}
 
 body{
-    margin:0;
-    padding:20px;
-    font-family:Arial,Helvetica,sans-serif;
-    background:#f4f6f8;
-}
-
-.container{
+    font-family:Arial,sans-serif;
     max-width:700px;
-    margin:auto;
-    background:#fff;
-    padding:25px;
-    border-radius:12px;
-    box-shadow:0 2px 10px rgba(0,0,0,.1);
+    margin:30px auto;
+    padding:20px;
 }
 
-h1{
-    text-align:center;
-    margin-top:0;
+.row{
+    display:flex;
+    gap:10px;
 }
 
-label{
-    display:block;
-    margin-top:15px;
-    margin-bottom:6px;
-    font-weight:bold;
-}
-
+input,
 select,
-input[type=file]{
-    width:100%;
-    padding:10px;
-    border:1px solid #ccc;
-    border-radius:6px;
+button{
+    padding:12px;
+}
+
+select{
+    flex:1;
+}
+
+#folderName{
+    flex:1;
 }
 
 button{
     cursor:pointer;
-    border:none;
-    border-radius:6px;
-    padding:12px 18px;
-    font-size:15px;
 }
 
-#lockBtn{
-    margin-top:10px;
-    background:#ff9800;
-    color:white;
-}
-
-#uploadBtn{
-    width:100%;
+#status{
     margin-top:20px;
-    background:#2196f3;
-    color:white;
-}
-
-#uploadBtn:hover{
-    opacity:.9;
-}
-
-.locked{
-    background:#ececec;
-}
-
-.progress-wrapper{
-    margin-top:15px;
-    display:none;
 }
 
 progress{
     width:100%;
-    height:24px;
-}
-
-.status{
-    margin-top:15px;
-    padding:10px;
-    border-radius:6px;
     display:none;
 }
 
-.success{
-    background:#d4edda;
-    color:#155724;
+video{
+    width:100%;
+    margin-top:10px;
 }
 
-.error{
-    background:#f8d7da;
-    color:#721c24;
-}
-
-.info{
-    background:#e7f3ff;
-    color:#0c5460;
-}
-
-.small{
-    font-size:13px;
-    color:#666;
-}
 </style>
 </head>
 <body>
 
-<div class="container">
+<h2>Damage Video Upload</h2>
 
-    <h1>Damage Upload Form</h1>
+<div class="row">
 
-    <label>Destination Folder</label>
+<select id="folderSelect">
 
-    <select id="folderSelect">
-        <option value="1">Damage Form [1]</option>
-        <option value="2">Damage Form [2]</option>
-    </select>
+<option value="1">
+Damage Form [1]
+</option>
 
-    <button id="lockBtn">🔒 Lock Selection</button>
+<option value="2">
+Damage Form [2]
+</option>
 
-    <div class="small">
-        Folder selection can be locked and will remain after refresh.
-    </div>
+</select>
 
-    <label>Select File</label>
-    <input type="file" id="fileInput">
-
-    <button id="uploadBtn">
-        Upload File
-    </button>
-
-    <div class="progress-wrapper" id="progressWrapper">
-        <progress id="progressBar" value="0" max="100"></progress>
-    </div>
-
-    <div id="status" class="status"></div>
+<button id="lockBtn">
+🔒 Lock
+</button>
 
 </div>
+
+<br>
+
+<div class="row">
+
+<input
+    id="folderName"
+    placeholder="Folder Name / Barcode">
+
+<button id="scanBtn">
+📷 Scan
+</button>
+
+</div>
+
+<br>
+
+<input
+type="file"
+id="videoFile"
+accept="video/*">
+
+<video
+id="preview"
+controls
+style="display:none">
+</video>
+
+<br><br>
+
+<button id="uploadBtn">
+Upload
+</button>
+
+<br><br>
+
+<progress
+id="progress"
+max="100"
+value="0">
+</progress>
+
+<div id="status"></div>
 
 <script>
 
 const SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbxY4JKOrVwsgkcLBNLnfM8erlcrT-YFq6gAazH1j0H_6qzD6IgoPyXlRW7rHBnJOaEM/exec";
 
-const folderSelect = document.getElementById("folderSelect");
-const lockBtn = document.getElementById("lockBtn");
-const uploadBtn = document.getElementById("uploadBtn");
+const folderSelect =
+document.getElementById(
+"folderSelect"
+);
 
-function showStatus(message,type){
+const lockBtn =
+document.getElementById(
+"lockBtn"
+);
 
-    const status = document.getElementById("status");
+const folderName =
+document.getElementById(
+"folderName"
+);
 
-    status.style.display = "block";
-    status.className = "status " + type;
-    status.innerHTML = message;
+const progress =
+document.getElementById(
+"progress"
+);
+
+const statusDiv =
+document.getElementById(
+"status"
+);
+
+const preview =
+document.getElementById(
+"preview"
+);
+
+function loadSettings(){
+
+    const savedFolder =
+        localStorage.getItem(
+            "selectedFolder"
+        );
+
+    const locked =
+        localStorage.getItem(
+            "folderLocked"
+        );
+
+    if(savedFolder){
+        folderSelect.value =
+            savedFolder;
+    }
+
+    if(locked==="true"){
+
+        folderSelect.disabled =
+            true;
+
+        lockBtn.innerText =
+            "🔓 Unlock";
+    }
 }
 
-function saveFolder(){
+loadSettings();
+
+lockBtn.onclick=function(){
+
+    if(folderSelect.disabled){
+
+        folderSelect.disabled=
+            false;
+
+        localStorage.setItem(
+            "folderLocked",
+            "false"
+        );
+
+        lockBtn.innerText=
+            "🔒 Lock";
+
+    }else{
+
+        folderSelect.disabled=
+            true;
+
+        localStorage.setItem(
+            "folderLocked",
+            "true"
+        );
+
+        localStorage.setItem(
+            "selectedFolder",
+            folderSelect.value
+        );
+
+        lockBtn.innerText=
+            "🔓 Unlock";
+    }
+};
+
+folderSelect.onchange=function(){
+
     localStorage.setItem(
         "selectedFolder",
         folderSelect.value
     );
-}
+};
 
-function loadSettings(){
-
-    const folder =
-        localStorage.getItem("selectedFolder");
-
-    const locked =
-        localStorage.getItem("folderLocked");
-
-    if(folder){
-        folderSelect.value = folder;
-    }
-
-    if(locked === "true"){
-        lockFolder();
-    }
-}
-
-function lockFolder(){
-
-    folderSelect.disabled = true;
-    folderSelect.classList.add("locked");
-
-    lockBtn.textContent =
-        "🔓 Unlock Selection";
-
-    localStorage.setItem(
-        "folderLocked",
-        "true"
-    );
-
-    saveFolder();
-}
-
-function unlockFolder(){
-
-    folderSelect.disabled = false;
-    folderSelect.classList.remove("locked");
-
-    lockBtn.textContent =
-        "🔒 Lock Selection";
-
-    localStorage.setItem(
-        "folderLocked",
-        "false"
-    );
-}
-
-lockBtn.addEventListener("click",()=>{
-
-    if(folderSelect.disabled){
-        unlockFolder();
-    }else{
-        lockFolder();
-    }
-
-});
-
-folderSelect.addEventListener(
-    "change",
-    saveFolder
-);
-
-loadSettings();
-
-uploadBtn.addEventListener(
-    "click",
-    uploadFile
-);
-
-function uploadFile(){
+document
+.getElementById(
+"videoFile"
+)
+.onchange=function(){
 
     const file =
-        document.getElementById(
-            "fileInput"
-        ).files[0];
+        this.files[0];
+
+    if(!file)return;
+
+    preview.src =
+        URL.createObjectURL(
+            file
+        );
+
+    preview.style.display=
+        "block";
+};
+
+document
+.getElementById(
+"scanBtn"
+)
+.onclick=function(){
+
+    const code =
+    prompt(
+        "Enter scanned barcode"
+    );
+
+    if(code){
+
+        folderName.value=
+            code.trim();
+    }
+};
+
+document
+.getElementById(
+"uploadBtn"
+)
+.onclick=async function(){
+
+    const file =
+    document
+    .getElementById(
+        "videoFile"
+    )
+    .files[0];
 
     if(!file){
 
-        showStatus(
-            "Please select a file first.",
-            "error"
+        alert(
+            "Select video"
         );
 
         return;
     }
 
-    showStatus(
-        "Preparing upload...",
-        "info"
-    );
+    if(!folderName.value.trim()){
 
-    document.getElementById(
-        "progressWrapper"
-    ).style.display = "block";
+        alert(
+            "Folder name required"
+        );
 
-    document.getElementById(
-        "progressBar"
-    ).value = 20;
+        return;
+    }
 
-    const reader = new FileReader();
+    const MAX_SIZE =
+    19*1024*1024;
 
-    reader.onload = async function(event){
+    if(file.size > MAX_SIZE){
 
-        try{
+        alert(
+        "Video must be under 19 MB"
+        );
 
-            const base64 =
-                event.target.result
-                .split(",")[1];
+        return;
+    }
 
-            document.getElementById(
-                "progressBar"
-            ).value = 60;
+    progress.style.display=
+        "block";
 
-            const response =
-                await fetch(
-                    SCRIPT_URL,
-                    {
-                        method:"POST",
-                        body:JSON.stringify({
+    progress.value=20;
 
-                            folder:
-                                folderSelect.value,
+    const reader =
+    new FileReader();
 
-                            fileName:
-                                file.name,
+    reader.onload =
+    async function(e){
 
-                            mimeType:
-                                file.type ||
-                                "application/octet-stream",
+        progress.value=60;
 
-                            fileData:
-                                base64
-                        })
-                    }
-                );
+        const base64 =
+        e.target.result
+        .split(",")[1];
 
-            const result =
-                await response.json();
+        const response =
+        await fetch(
+            SCRIPT_URL,
+            {
+                method:"POST",
+                body:JSON.stringify({
 
-            document.getElementById(
-                "progressBar"
-            ).value = 100;
+                    folder:
+                        folderSelect.value,
 
-            if(result.success){
+                    folderName:
+                        folderName.value,
 
-                showStatus(
-                    `
-                    ✅ Upload Successful<br><br>
-                    <a href="${result.url}" target="_blank">
-                    Open Uploaded File
-                    </a>
-                    `,
-                    "success"
-                );
+                    fileName:
+                        "Video.mp4",
 
-                document.getElementById(
-                    "fileInput"
-                ).value = "";
+                    mimeType:
+                        "video/mp4",
 
-            }else{
-
-                showStatus(
-                    result.error ||
-                    "Upload failed.",
-                    "error"
-                );
+                    fileData:
+                        base64
+                })
             }
+        );
 
-        }catch(error){
+        const result =
+            await response.json();
 
-            showStatus(
-                error.message,
-                "error"
-            );
+        progress.value=100;
+
+        if(result.success){
+
+            statusDiv.innerHTML=
+            "✅ Uploaded";
+
+        }else{
+
+            statusDiv.innerHTML=
+            "❌ "+
+            result.error;
         }
     };
 
-    reader.readAsDataURL(file);
-}
+    reader.readAsDataURL(
+        file
+    );
+};
+
 </script>
 
 </body>
