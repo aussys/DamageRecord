@@ -3,613 +3,239 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
 <title>Damage Upload</title>
 
 <style>
-body{
-    font-family:Arial,sans-serif;
-    max-width:700px;
-    margin:30px auto;
-    padding:20px;
-}
-
-.row{
-    display:flex;
-    gap:10px;
-}
-
-input,
-select,
-button{
-    padding:12px;
-}
-
-select{
-    flex:1;
-}
-
-#folderName{
-    flex:1;
-}
-
-button{
-    cursor:pointer;
-}
-
-#status{
-    margin-top:20px;
-}
-
-progress{
-    width:100%;
-    display:none;
-}
-
-video{
-    width:100%;
-    margin-top:10px;
-}
-
-#scannerModal{
-    display:none;
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:rgba(0,0,0,.85);
-    z-index:9999;
-}
-
-#scannerContent{
-    background:white;
-    margin:20px;
-    padding:15px;
-    border-radius:10px;
-}
-
-#reader{
-    width:100%;
-}
+body{font-family:Arial,sans-serif;max-width:700px;margin:20px auto;padding:15px}
+.row{display:flex;gap:10px}
+input,select,button{padding:12px}
+select,#folderName{flex:1}
+button{cursor:pointer}
+progress{width:100%;display:none}
+video{width:100%;margin-top:10px}
+#scannerModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999}
+#scannerContent{background:#fff;margin:20px;padding:15px;border-radius:10px}
+#reader{width:100%}
 </style>
 </head>
 <body>
 
 <div id="scannerModal">
-    <div id="scannerContent">
-
-        <h3>Scan Barcode</h3>
-
-        <div id="reader"></div>
-
-        <br>
-
-        <button onclick="closeScanner()">
-            Close
-        </button>
-
-    </div>
+  <div id="scannerContent">
+    <h3>Scan Barcode</h3>
+    <div id="reader"></div><br>
+    <button onclick="closeScanner()">Close</button>
+  </div>
 </div>
 
 <h2>Damage Video Upload</h2>
 
 <div class="row">
-
 <select id="folderSelect">
 <option value="1">Damage Form [1]</option>
 <option value="2">Damage Form [2]</option>
 </select>
-
-<button id="lockBtn">
-🔒 Lock
-</button>
-
+<button id="lockBtn">🔒 Lock</button>
 </div>
 
 <br>
 
 <div class="row">
-
-<input
-    id="folderName"
-    placeholder="Folder Name / Barcode">
-
-<button id="scanBtn">
-📷 Scan
-</button>
-
+<input id="folderName" placeholder="Folder Name / Barcode">
+<button id="scanBtn">📷 Scan</button>
 </div>
 
 <br>
 
-<br>
+<button id="startRecordBtn">🎥 Start Recording</button>
+<button id="stopRecordBtn" disabled>⏹ Stop Recording</button>
+
+<div id="recordStatus"></div>
+
+<video id="camera" autoplay playsinline muted style="display:none"></video>
+<video id="preview" controls playsinline style="display:none"></video>
 
 <br>
 
-<button id="startRecordBtn">
-🎥 Start Recording
-</button>
-
-<button
-id="stopRecordBtn"
-disabled>
-⏹ Stop Recording
-</button>
+<button id="uploadBtn">Upload</button>
 
 <br><br>
 
-<video
-id="preview"
-controls
-playsinline
-style="display:none;width:100%;">
-</video>
-
-<br><br>
-
-<button id="uploadBtn">
-Upload
-</button>
-
-<br><br>
-
-<progress
-id="progress"
-max="100"
-value="0">
-</progress>
-
+<progress id="progress" max="100" value="0"></progress>
 <div id="status"></div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
+const SCRIPT_URL="https://script.google.com/macros/s/AKfycbxY4JKOrVwsgkcLBNLnfM8erlcrT-YFq6gAazH1j0H_6qzD6IgoPyXlRW7rHBnJOaEM/exec";
 
-const SCRIPT_URL =
-"https://script.google.com/macros/s/AKfycbxY4JKOrVwsgkcLBNLnfM8erlcrT-YFq6gAazH1j0H_6qzD6IgoPyXlRW7rHBnJOaEM/exec";
+const folderSelect=document.getElementById("folderSelect");
+const lockBtn=document.getElementById("lockBtn");
+const folderName=document.getElementById("folderName");
+const progress=document.getElementById("progress");
+const statusDiv=document.getElementById("status");
+const preview=document.getElementById("preview");
+const camera=document.getElementById("camera");
+const recordStatus=document.getElementById("recordStatus");
 
-const folderSelect =
-document.getElementById("folderSelect");
+let scanner=null;
+let mediaRecorder=null;
+let recordedChunks=[];
+let recordedFile=null;
+let stream=null;
 
-const lockBtn =
-document.getElementById("lockBtn");
+(function(){
+ const savedFolder=localStorage.getItem("selectedFolder");
+ const locked=localStorage.getItem("folderLocked");
+ if(savedFolder) folderSelect.value=savedFolder;
+ if(locked==="true"){
+   folderSelect.disabled=true;
+   lockBtn.textContent="🔓 Unlock";
+ }
+})();
 
-const folderName =
-document.getElementById("folderName");
-
-const progress =
-document.getElementById("progress");
-
-const statusDiv =
-document.getElementById("status");
-
-const preview =
-document.getElementById("preview");
-    
-let mediaRecorder;
-let recordedChunks = [];
-let recordedFile = null;
-let stream = null;
-
-let scanner = null;
-async function compressVideo(file){
-
-    statusDiv.innerHTML =
-    "Compressor unavailable, using original video";
-
-    return file;
-}
-
-function loadSettings(){
-
-    const savedFolder =
-        localStorage.getItem(
-            "selectedFolder"
-        );
-
-    const locked =
-        localStorage.getItem(
-            "folderLocked"
-        );
-
-    if(savedFolder){
-        folderSelect.value =
-            savedFolder;
-    }
-
-    if(locked === "true"){
-
-        folderSelect.disabled =
-            true;
-
-        lockBtn.innerText =
-            "🔓 Unlock";
-    }
-}
-
-loadSettings();
-
-lockBtn.onclick = function(){
-
-    if(folderSelect.disabled){
-
-        folderSelect.disabled =
-            false;
-
-        localStorage.setItem(
-            "folderLocked",
-            "false"
-        );
-
-        lockBtn.innerText =
-            "🔒 Lock";
-
-    }else{
-
-        folderSelect.disabled =
-            true;
-
-        localStorage.setItem(
-            "folderLocked",
-            "true"
-        );
-
-        localStorage.setItem(
-            "selectedFolder",
-            folderSelect.value
-        );
-
-        lockBtn.innerText =
-            "🔓 Unlock";
-    }
+lockBtn.onclick=()=>{
+ if(folderSelect.disabled){
+   folderSelect.disabled=false;
+   localStorage.setItem("folderLocked","false");
+   lockBtn.textContent="🔒 Lock";
+ }else{
+   folderSelect.disabled=true;
+   localStorage.setItem("folderLocked","true");
+   localStorage.setItem("selectedFolder",folderSelect.value);
+   lockBtn.textContent="🔓 Unlock";
+ }
 };
 
-folderSelect.onchange = function(){
+folderSelect.onchange=()=>localStorage.setItem("selectedFolder",folderSelect.value);
 
-    localStorage.setItem(
-        "selectedFolder",
-        folderSelect.value
-    );
-};
-
-
-
-document
-.getElementById("scanBtn")
-.addEventListener(
-    "click",
-    startScanner
-);
+document.getElementById("scanBtn").onclick=startScanner;
 
 async function startScanner(){
-
-    document
-    .getElementById(
-        "scannerModal"
-    )
-    .style.display =
-    "block";
-
-    scanner =
-    new Html5Qrcode(
-        "reader"
-    );
-
-    try{
-
-        await scanner.start(
-            {
-                facingMode:
-                "environment"
-            },
-            {
-                fps:10,
-                qrbox:250
-            },
-            function(decodedText){
-
-                folderName.value =
-                    decodedText;
-
-                closeScanner();
-            }
-        );
-
-    }catch(err){
-
-        alert(
-            "Camera Error: " +
-            err
-        );
-
-        closeScanner();
-    }
+ document.getElementById("scannerModal").style.display="block";
+ scanner=new Html5Qrcode("reader");
+ try{
+   await scanner.start({facingMode:"environment"},{fps:10,qrbox:250},txt=>{
+     folderName.value=txt;
+     closeScanner();
+   });
+ }catch(e){
+   alert("Camera Error: "+e);
+   closeScanner();
+ }
 }
 
 async function closeScanner(){
-
-    if(scanner){
-
-        try{
-            await scanner.stop();
-        }catch(e){}
-
-        try{
-            scanner.clear();
-        }catch(e){}
-
-        scanner = null;
-    }
-
-    document
-    .getElementById(
-        "scannerModal"
-    )
-    .style.display =
-    "none";
-}
-document
-.getElementById(
-    "startRecordBtn"
-)
-.onclick =
-async function(){
-
-    try{
-
-        stream =
-        await navigator.mediaDevices.getUserMedia({
-
-            video:{
-                facingMode:"environment",
-                width:1280,
-                height:720
-            },
-
-            audio:true
-        });
-
-        recordedChunks = [];
-
-        mediaRecorder =
-        new MediaRecorder(
-            stream,
-            {
-                mimeType:"video/webm",
-                videoBitsPerSecond:800000
-            }
-        );
-
-        mediaRecorder.ondataavailable =
-        function(event){
-
-            if(event.data.size > 0){
-
-                recordedChunks.push(
-                    event.data
-                );
-            }
-        };
-
-        mediaRecorder.onstop =
-        function(){
-
-            const blob =
-            new Blob(
-                recordedChunks,
-                {
-                    type:"video/webm"
-                }
-            );
-
-            recordedFile =
-            new File(
-                [blob],
-                "Video.webm",
-                {
-                    type:"video/webm"
-                }
-            );
-
-            preview.src =
-            URL.createObjectURL(
-                blob
-            );
-
-            preview.style.display =
-            "block";
-
-            statusDiv.innerHTML =
-            "Recorded Size: "
-            +
-            (
-                recordedFile.size
-                /
-                1024
-                /
-                1024
-            ).toFixed(1)
-            +
-            " MB";
-
-            stream
-            .getTracks()
-            .forEach(
-                t=>t.stop()
-            );
-        };
-
-        mediaRecorder.start();
-
-        document
-        .getElementById(
-            "startRecordBtn"
-        )
-        .disabled = true;
-
-        document
-        .getElementById(
-            "stopRecordBtn"
-        )
-        .disabled = false;
-
-    }catch(err){
-
-        alert(
-            "Camera Error: "
-            +
-            err.message
-        );
-    }
-};
-
-document
-.getElementById(
-    "stopRecordBtn"
-)
-.onclick =
-function(){
-
-    mediaRecorder.stop();
-
-    document
-    .getElementById(
-        "startRecordBtn"
-    )
-    .disabled = false;
-
-    document
-    .getElementById(
-        "stopRecordBtn"
-    )
-    .disabled = true;
-};
-    
-document
-.getElementById("uploadBtn")
-.onclick =
-async function(){
-
-if(!file){
-
-    alert(
-        "Record a video first"
-    );
-
-    return;
+ if(scanner){
+   try{await scanner.stop();}catch(e){}
+   try{scanner.clear();}catch(e){}
+   scanner=null;
+ }
+ document.getElementById("scannerModal").style.display="none";
 }
 
-    if(!file){
+document.getElementById("startRecordBtn").onclick=async()=>{
+ try{
+   stream=await navigator.mediaDevices.getUserMedia({
+     video:{facingMode:"environment",width:1280,height:720},
+     audio:true
+   });
 
-        alert(
-            "Select video"
-        );
+   camera.srcObject=stream;
+   camera.style.display="block";
+   preview.style.display="none";
 
-        return;
-    }
+   recordedChunks=[];
 
-    if(
-        !file.type.startsWith(
-            "video/"
-        )
-    ){
-        alert(
-            "Video only"
-        );
-        return;
-    }
+   mediaRecorder=new MediaRecorder(stream,{
+     mimeType:"video/webm",
+     videoBitsPerSecond:800000
+   });
 
-    if(
-        !folderName.value.trim()
-    ){
+   mediaRecorder.ondataavailable=e=>{
+     if(e.data.size>0) recordedChunks.push(e.data);
+   };
 
-        alert(
-            "Folder name required"
-        );
+   mediaRecorder.onstop=()=>{
+     const blob=new Blob(recordedChunks,{type:"video/webm"});
+     recordedFile=new File([blob],"Video.webm",{type:"video/webm"});
 
-        return;
-    }
-    
-let uploadFile = file;
-    
-    progress.style.display =
-        "block";
+     camera.style.display="none";
+     camera.srcObject=null;
 
-    progress.value = 20;
+     preview.src=URL.createObjectURL(blob);
+     preview.style.display="block";
 
-    const reader =
-    new FileReader();
+     recordStatus.innerHTML="✅ Recorded: "+(recordedFile.size/1024/1024).toFixed(1)+" MB";
 
-    reader.onload =
-    async function(e){
+     stream.getTracks().forEach(t=>t.stop());
+   };
 
-        progress.value = 60;
+   mediaRecorder.start();
+   recordStatus.innerHTML="🔴 Recording...";
+   startRecordBtn.disabled=true;
+   stopRecordBtn.disabled=false;
 
-        const base64 =
-        e.target.result
-        .split(",")[1];
-
-        try{
-
-            const response =
-            await fetch(
-                SCRIPT_URL,
-                {
-                    method:"POST",
-                    body:JSON.stringify({
-
-                        folder:
-                        folderSelect.value,
-
-                        folderName:
-                        folderName.value.trim(),
-
-                        fileName:
-                        "Video.webm",
-
-                        mimeType:
-                        "video/webm",
-
-                        fileData:
-                        base64
-                    })
-                }
-            );
-
-            const result =
-            await response.json();
-
-            progress.value = 100;
-
-            if(
-                result.success
-            ){
-
-                statusDiv.innerHTML =
-                "✅ Uploaded";
-
-            }else{
-
-                statusDiv.innerHTML =
-                "❌ " +
-                result.error;
-            }
-
-        }catch(err){
-
-            statusDiv.innerHTML =
-            "❌ Upload failed: " +
-            err.message;
-        }
-    };
-
-    reader.readAsDataURL(
-    uploadFile
-);
+ }catch(err){
+   alert("Camera Error: "+err.message);
+ }
 };
 
+document.getElementById("stopRecordBtn").onclick=()=>{
+ if(mediaRecorder){
+   mediaRecorder.stop();
+   startRecordBtn.disabled=false;
+   stopRecordBtn.disabled=true;
+ }
+};
+
+document.getElementById("uploadBtn").onclick=async()=>{
+
+ const file=recordedFile;
+
+ if(!file){ alert("Record a video first"); return; }
+ if(!folderName.value.trim()){ alert("Folder name required"); return; }
+
+ progress.style.display="block";
+ progress.value=20;
+ statusDiv.innerHTML="Preparing upload...";
+
+ const reader=new FileReader();
+
+ reader.onload=async(e)=>{
+   try{
+     progress.value=60;
+
+     const base64=e.target.result.split(",")[1];
+
+     const response=await fetch(SCRIPT_URL,{
+       method:"POST",
+       body:JSON.stringify({
+         folder:folderSelect.value,
+         folderName:folderName.value.trim(),
+         fileName:"Video.webm",
+         mimeType:"video/webm",
+         fileData:base64
+       })
+     });
+
+     const result=await response.json();
+
+     progress.value=100;
+
+     if(result.success){
+       statusDiv.innerHTML="✅ Uploaded";
+     }else{
+       statusDiv.innerHTML="❌ "+result.error;
+     }
+
+   }catch(err){
+     statusDiv.innerHTML="❌ Upload failed: "+err.message;
+   }
+ };
+
+ reader.readAsDataURL(file);
+};
 </script>
-
 </body>
 </html>
