@@ -392,40 +392,8 @@ async function(){
 
         return;
     }
-const MAX_SIZE =
-19 * 1024 * 1024;
-
-let uploadFile =
-file;
-
-if(
-    file.size >
-    MAX_SIZE
-){
-
-    statusDiv.innerHTML =
-    "Video too large. Compressing...";
-
-    uploadFile =
-    await compressVideo(
-        file
-    );
-
-    if(
-        uploadFile.size >
-        MAX_SIZE
-    ){
-
-        alert(
-            "Compressed video still exceeds 19 MB"
-        );
-
-        return;
-    }
-
-    statusDiv.innerHTML =
-    "Compression complete";
-}
+    
+let uploadFile = file;
     
     progress.style.display =
         "block";
