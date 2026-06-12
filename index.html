@@ -123,16 +123,27 @@ video{
 
 <br>
 
-<input
-type="file"
-id="videoFile"
-accept="video/*"
-capture="environment">
+<br>
+
+<br>
+
+<button id="startRecordBtn">
+🎥 Start Recording
+</button>
+
+<button
+id="stopRecordBtn"
+disabled>
+⏹ Stop Recording
+</button>
+
+<br><br>
 
 <video
 id="preview"
 controls
-style="display:none">
+playsinline
+style="display:none;width:100%;">
 </video>
 
 <br><br>
@@ -175,6 +186,11 @@ document.getElementById("status");
 
 const preview =
 document.getElementById("preview");
+    
+let mediaRecorder;
+let recordedChunks = [];
+let recordedFile = null;
+let stream = null;
 
 let scanner = null;
 async function compressVideo(file){
@@ -257,23 +273,7 @@ folderSelect.onchange = function(){
     );
 };
 
-document
-.getElementById("videoFile")
-.onchange = function(){
 
-    const file =
-        this.files[0];
-
-    if(!file){
-        return;
-    }
-
-    preview.src =
-        URL.createObjectURL(file);
-
-    preview.style.display =
-        "block";
-};
 
 document
 .getElementById("scanBtn")
@@ -349,18 +349,156 @@ async function closeScanner(){
     .style.display =
     "none";
 }
+document
+.getElementById(
+    "startRecordBtn"
+)
+.onclick =
+async function(){
 
+    try{
+
+        stream =
+        await navigator.mediaDevices.getUserMedia({
+
+            video:{
+                facingMode:"environment",
+                width:1280,
+                height:720
+            },
+
+            audio:true
+        });
+
+        recordedChunks = [];
+
+        mediaRecorder =
+        new MediaRecorder(
+            stream,
+            {
+                mimeType:"video/webm",
+                videoBitsPerSecond:800000
+            }
+        );
+
+        mediaRecorder.ondataavailable =
+        function(event){
+
+            if(event.data.size > 0){
+
+                recordedChunks.push(
+                    event.data
+                );
+            }
+        };
+
+        mediaRecorder.onstop =
+        function(){
+
+            const blob =
+            new Blob(
+                recordedChunks,
+                {
+                    type:"video/webm"
+                }
+            );
+
+            recordedFile =
+            new File(
+                [blob],
+                "Video.webm",
+                {
+                    type:"video/webm"
+                }
+            );
+
+            preview.src =
+            URL.createObjectURL(
+                blob
+            );
+
+            preview.style.display =
+            "block";
+
+            statusDiv.innerHTML =
+            "Recorded Size: "
+            +
+            (
+                recordedFile.size
+                /
+                1024
+                /
+                1024
+            ).toFixed(1)
+            +
+            " MB";
+
+            stream
+            .getTracks()
+            .forEach(
+                t=>t.stop()
+            );
+        };
+
+        mediaRecorder.start();
+
+        document
+        .getElementById(
+            "startRecordBtn"
+        )
+        .disabled = true;
+
+        document
+        .getElementById(
+            "stopRecordBtn"
+        )
+        .disabled = false;
+
+    }catch(err){
+
+        alert(
+            "Camera Error: "
+            +
+            err.message
+        );
+    }
+};
+
+document
+.getElementById(
+    "stopRecordBtn"
+)
+.onclick =
+function(){
+
+    mediaRecorder.stop();
+
+    document
+    .getElementById(
+        "startRecordBtn"
+    )
+    .disabled = false;
+
+    document
+    .getElementById(
+        "stopRecordBtn"
+    )
+    .disabled = true;
+};
+    
 document
 .getElementById("uploadBtn")
 .onclick =
 async function(){
 
-    const file =
-    document
-    .getElementById(
-        "videoFile"
-    )
-    .files[0];
+if(!file){
+
+    alert(
+        "Record a video first"
+    );
+
+    return;
+}
 
     if(!file){
 
@@ -428,10 +566,10 @@ let uploadFile = file;
                         folderName.value.trim(),
 
                         fileName:
-                        "Video.mp4",
+                        "Video.webm",
 
                         mimeType:
-                        "video/mp4",
+                        "video/webm",
 
                         fileData:
                         base64
