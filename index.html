@@ -180,21 +180,11 @@ document.getElementById("preview");
 let scanner = null;
 async function compressVideo(file){
 
-    const { FFmpeg } = FFmpegWASM;
-
-    const ffmpeg = new FFmpeg();
-
     statusDiv.innerHTML =
-    "Loading compressor...";
+    "Compressor unavailable, using original video";
 
-    await ffmpeg.load();
-
-    await ffmpeg.writeFile(
-        "input.mp4",
-        new Uint8Array(
-            await file.arrayBuffer()
-        )
-    );
+    return file;
+}
 
     statusDiv.innerHTML =
     "Compressing video...";
