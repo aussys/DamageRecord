@@ -7,7 +7,6 @@
 <title>Damage Upload</title>
 
 <style>
-
 body{
     font-family:Arial,sans-serif;
     max-width:700px;
@@ -52,115 +51,54 @@ video{
     margin-top:10px;
 }
 
+#scannerModal{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,.85);
+    z-index:9999;
+}
+
+#scannerContent{
+    background:white;
+    margin:20px;
+    padding:15px;
+    border-radius:10px;
+}
+
+#reader{
+    width:100%;
+}
 </style>
 </head>
 <body>
-<div id="scannerModal" style="
-display:none;
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-background:rgba(0,0,0,.85);
-z-index:9999;
-">
 
-  <div style="
-  background:white;
-  margin:20px;
-  padding:15px;
-  border-radius:10px;
-  ">
+<div id="scannerModal">
+    <div id="scannerContent">
 
-    <h3>Scan Barcode</h3>
+        <h3>Scan Barcode</h3>
 
-    <div id="reader"></div>
+        <div id="reader"></div>
 
-    <br>
+        <br>
 
-let scanner;
+        <button onclick="closeScanner()">
+            Close
+        </button>
 
-document
-.getElementById("scanBtn")
-.addEventListener("click", startScanner);
-
-async function startScanner() {
-
-    document
-    .getElementById("scannerModal")
-    .style.display = "block";
-
-    scanner = new Html5Qrcode("reader");
-
-    try {
-
-        await scanner.start(
-            {
-                facingMode: "environment"
-            },
-            {
-                fps: 10,
-                qrbox: 250
-            },
-            onScanSuccess
-        );
-
-    } catch (err) {
-
-        alert(
-            "Cannot access camera.\n" +
-            err
-        );
-
-        closeScanner();
-    }
-}
-
-async function onScanSuccess(decodedText) {
-
-    document
-    .getElementById("folderName")
-    .value = decodedText;
-
-    await closeScanner();
-}
-
-async function closeScanner() {
-
-    if (scanner) {
-
-        try {
-            await scanner.stop();
-        } catch(e){}
-
-        try {
-            scanner.clear();
-        } catch(e){}
-    }
-
-    document
-    .getElementById("scannerModal")
-    .style.display = "none";
-}
-
-  </div>
+    </div>
 </div>
-    
+
 <h2>Damage Video Upload</h2>
 
 <div class="row">
 
 <select id="folderSelect">
-
-<option value="1">
-Damage Form [1]
-</option>
-
-<option value="2">
-Damage Form [2]
-</option>
-
+<option value="1">Damage Form [1]</option>
+<option value="2">Damage Form [2]</option>
 </select>
 
 <button id="lockBtn">
@@ -188,7 +126,8 @@ Damage Form [2]
 <input
 type="file"
 id="videoFile"
-accept="video/*">
+accept="video/*"
+capture="environment">
 
 <video
 id="preview"
@@ -212,40 +151,32 @@ value="0">
 
 <div id="status"></div>
 
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <script>
 
 const SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbxY4JKOrVwsgkcLBNLnfM8erlcrT-YFq6gAazH1j0H_6qzD6IgoPyXlRW7rHBnJOaEM/exec";
 
 const folderSelect =
-document.getElementById(
-"folderSelect"
-);
+document.getElementById("folderSelect");
 
 const lockBtn =
-document.getElementById(
-"lockBtn"
-);
+document.getElementById("lockBtn");
 
 const folderName =
-document.getElementById(
-"folderName"
-);
+document.getElementById("folderName");
 
 const progress =
-document.getElementById(
-"progress"
-);
+document.getElementById("progress");
 
 const statusDiv =
-document.getElementById(
-"status"
-);
+document.getElementById("status");
 
 const preview =
-document.getElementById(
-"preview"
-);
+document.getElementById("preview");
+
+let scanner = null;
 
 function loadSettings(){
 
@@ -264,7 +195,7 @@ function loadSettings(){
             savedFolder;
     }
 
-    if(locked==="true"){
+    if(locked === "true"){
 
         folderSelect.disabled =
             true;
@@ -276,11 +207,11 @@ function loadSettings(){
 
 loadSettings();
 
-lockBtn.onclick=function(){
+lockBtn.onclick = function(){
 
     if(folderSelect.disabled){
 
-        folderSelect.disabled=
+        folderSelect.disabled =
             false;
 
         localStorage.setItem(
@@ -288,12 +219,12 @@ lockBtn.onclick=function(){
             "false"
         );
 
-        lockBtn.innerText=
+        lockBtn.innerText =
             "🔒 Lock";
 
     }else{
 
-        folderSelect.disabled=
+        folderSelect.disabled =
             true;
 
         localStorage.setItem(
@@ -306,12 +237,12 @@ lockBtn.onclick=function(){
             folderSelect.value
         );
 
-        lockBtn.innerText=
+        lockBtn.innerText =
             "🔓 Unlock";
     }
 };
 
-folderSelect.onchange=function(){
+folderSelect.onchange = function(){
 
     localStorage.setItem(
         "selectedFolder",
@@ -320,48 +251,102 @@ folderSelect.onchange=function(){
 };
 
 document
-.getElementById(
-"videoFile"
-)
-.onchange=function(){
+.getElementById("videoFile")
+.onchange = function(){
 
     const file =
         this.files[0];
 
-    if(!file)return;
+    if(!file){
+        return;
+    }
 
     preview.src =
-        URL.createObjectURL(
-            file
-        );
+        URL.createObjectURL(file);
 
-    preview.style.display=
+    preview.style.display =
         "block";
 };
 
 document
-.getElementById(
-"scanBtn"
-)
-.onclick=function(){
+.getElementById("scanBtn")
+.addEventListener(
+    "click",
+    startScanner
+);
 
-    const code =
-    prompt(
-        "Enter scanned barcode"
+async function startScanner(){
+
+    document
+    .getElementById(
+        "scannerModal"
+    )
+    .style.display =
+    "block";
+
+    scanner =
+    new Html5Qrcode(
+        "reader"
     );
 
-    if(code){
+    try{
 
-        folderName.value=
-            code.trim();
+        await scanner.start(
+            {
+                facingMode:
+                "environment"
+            },
+            {
+                fps:10,
+                qrbox:250
+            },
+            function(decodedText){
+
+                folderName.value =
+                    decodedText;
+
+                closeScanner();
+            }
+        );
+
+    }catch(err){
+
+        alert(
+            "Camera Error: " +
+            err
+        );
+
+        closeScanner();
     }
-};
+}
+
+async function closeScanner(){
+
+    if(scanner){
+
+        try{
+            await scanner.stop();
+        }catch(e){}
+
+        try{
+            scanner.clear();
+        }catch(e){}
+
+        scanner = null;
+    }
+
+    document
+    .getElementById(
+        "scannerModal"
+    )
+    .style.display =
+    "none";
+}
 
 document
-.getElementById(
-"uploadBtn"
-)
-.onclick=async function(){
+.getElementById("uploadBtn")
+.onclick =
+async function(){
 
     const file =
     document
@@ -379,7 +364,20 @@ document
         return;
     }
 
-    if(!folderName.value.trim()){
+    if(
+        !file.type.startsWith(
+            "video/"
+        )
+    ){
+        alert(
+            "Video only"
+        );
+        return;
+    }
+
+    if(
+        !folderName.value.trim()
+    ){
 
         alert(
             "Folder name required"
@@ -389,21 +387,24 @@ document
     }
 
     const MAX_SIZE =
-    19*1024*1024;
+    19 * 1024 * 1024;
 
-    if(file.size > MAX_SIZE){
+    if(
+        file.size >
+        MAX_SIZE
+    ){
 
         alert(
-        "Video must be under 19 MB"
+            "Video must be under 19 MB"
         );
 
         return;
     }
 
-    progress.style.display=
+    progress.style.display =
         "block";
 
-    progress.value=20;
+    progress.value = 20;
 
     const reader =
     new FileReader();
@@ -411,52 +412,63 @@ document
     reader.onload =
     async function(e){
 
-        progress.value=60;
+        progress.value = 60;
 
         const base64 =
         e.target.result
         .split(",")[1];
 
-        const response =
-        await fetch(
-            SCRIPT_URL,
-            {
-                method:"POST",
-                body:JSON.stringify({
+        try{
 
-                    folder:
+            const response =
+            await fetch(
+                SCRIPT_URL,
+                {
+                    method:"POST",
+                    body:JSON.stringify({
+
+                        folder:
                         folderSelect.value,
 
-                    folderName:
-                        folderName.value,
+                        folderName:
+                        folderName.value.trim(),
 
-                    fileName:
+                        fileName:
                         "Video.mp4",
 
-                    mimeType:
+                        mimeType:
                         "video/mp4",
 
-                    fileData:
+                        fileData:
                         base64
-                })
-            }
-        );
+                    })
+                }
+            );
 
-        const result =
+            const result =
             await response.json();
 
-        progress.value=100;
+            progress.value = 100;
 
-        if(result.success){
+            if(
+                result.success
+            ){
 
-            statusDiv.innerHTML=
-            "✅ Uploaded";
+                statusDiv.innerHTML =
+                "✅ Uploaded";
 
-        }else{
+            }else{
 
-            statusDiv.innerHTML=
-            "❌ "+
-            result.error;
+                statusDiv.innerHTML =
+                "❌ " +
+                result.error;
+            }
+
+        }catch(err){
+
+            statusDiv.innerHTML =
+            "❌ Upload failed: " +
+            err.message;
         }
     };
 
@@ -466,6 +478,6 @@ document
 };
 
 </script>
-<script src="https://unpkg.com/html5-qrcode"></script>
+
 </body>
 </html>
