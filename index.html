@@ -84,6 +84,9 @@ let recordedChunks=[];
 let recordedFile=null;
 let stream=null;
 
+let uploadQueue = [];
+let uploading = false;
+
 (function(){
  const savedFolder=localStorage.getItem("selectedFolder");
  const locked=localStorage.getItem("folderLocked");
@@ -191,50 +194,128 @@ document.getElementById("stopRecordBtn").onclick=()=>{
 
 document.getElementById("uploadBtn").onclick=async()=>{
 
- const file=recordedFile;
+    if(!recordedFile){
+        alert("Record a video first");
+        return;
+    }
 
- if(!file){ alert("Record a video first"); return; }
- if(!folderName.value.trim()){ alert("Folder name required"); return; }
+    if(!folderName.value.trim()){
+        alert("Folder name required");
+        return;
+    }
 
- progress.style.display="block";
- progress.value=20;
- statusDiv.innerHTML="Preparing upload...";
+    uploadQueue.push({
+        file: recordedFile,
+        folder: folderSelect.value,
+        folderName: folderName.value.trim()
+    });
 
- const reader=new FileReader();
+    statusDiv.innerHTML =
+    "📦 Queue: " +
+    uploadQueue.length;
 
- reader.onload=async(e)=>{
-   try{
-     progress.value=60;
+    recordedFile = null;
 
-     const base64=e.target.result.split(",")[1];
+    preview.pause();
+    preview.removeAttribute("src");
+    preview.load();
+    preview.style.display = "none";
 
-     const response = await fetch(
-    SCRIPT_URL,
-    {
-        method:"POST",
-        headers:{
-            "Content-Type":"text/plain;charset=utf-8"
-        },
-        body:JSON.stringify({
-         folder:folderSelect.value,
-         folderName:folderName.value.trim(),
-         fileName:"Video.webm",
-         mimeType:"video/webm",
-         fileData:base64
-       })
-     });
-
-progress.value=100;
-statusDiv.innerHTML=
-"✅ Upload sent. Check Google Drive.";
-
-   }catch(err){
-     statusDiv.innerHTML="❌ Upload failed: "+err.message;
-   }
- };
-
- reader.readAsDataURL(file);
+    if(!uploading){
+        processQueue();
+    }
 };
+  async function processQueue(){
+
+    if(uploading) return;
+
+    uploading = true;
+
+    while(uploadQueue.length > 0){
+
+        const item =
+        uploadQueue[0];
+
+        try{
+
+            progress.style.display =
+            "block";
+
+            progress.value = 20;
+
+            statusDiv.innerHTML =
+            "⬆ Uploading (" +
+            uploadQueue.length +
+            " queued)";
+
+            const base64 =
+            await new Promise(resolve=>{
+
+                const reader =
+                new FileReader();
+
+                reader.onload =
+                e=>resolve(
+                    e.target.result
+                    .split(",")[1]
+                );
+
+                reader.readAsDataURL(
+                    item.file
+                );
+            });
+
+            progress.value = 60;
+
+            const response =
+            await fetch(
+                SCRIPT_URL,
+                {
+                    method:"POST",
+                    headers:{
+                        "Content-Type":
+                        "text/plain;charset=utf-8"
+                    },
+                    body:JSON.stringify({
+                        folder:item.folder,
+                        folderName:item.folderName,
+                        fileName:"Video.webm",
+                        mimeType:"video/webm",
+                        fileData:base64
+                    })
+                }
+            );
+
+            const result =
+            await response.json();
+
+            if(!result.success){
+                throw new Error(
+                    result.error
+                );
+            }
+
+            uploadQueue.shift();
+
+            progress.value = 100;
+
+        }catch(err){
+
+            statusDiv.innerHTML =
+            "❌ Upload failed: " +
+            err.message;
+
+            uploading = false;
+
+            return;
+        }
+    }
+
+    uploading = false;
+
+    statusDiv.innerHTML =
+    "✅ All uploads complete";
+}
 </script>
 </body>
 </html>
