@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Damage Recorder</title>
+
+<style>
+body{
+  font-family:Arial;
+  padding:20px;
+}
+
+button{
+  width:100%;
+  padding:15px;
+  font-size:18px;
+}
+
+video{
+  width:100%;
+  margin-top:15px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Damage Recorder</h2>
+
+<button onclick="startCamera()">
+Start Camera
+</button>
+
+<video
+  id="preview"
+  autoplay
+  playsinline>
+</video>
+
+<script>
+
+async function startCamera() {
+
+  try {
+
+    const stream =
+      await navigator.mediaDevices
+      .getUserMedia({
+        video:{
+          facingMode:"environment"
+        },
+        audio:true
+      });
+
+    document
+      .getElementById("preview")
+      .srcObject = stream;
+
+  }
+
+  catch(err) {
+
+    alert(
+      err.name + "\n" +
+      err.message
+    );
+
+  }
+
+}
+
+</script>
+
+</body>
+</html>
