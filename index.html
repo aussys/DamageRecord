@@ -1,276 +1,356 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Damage Recorder</title>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Damage Upload Form</title>
 
 <style>
-body { font-family: Arial; padding: 12px; }
-button, select, input { width: 100%; padding: 12px; margin: 6px 0; }
-video { width: 100%; }
-#reader { width: 100%; }
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:20px;
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f4f6f8;
+}
+
+.container{
+    max-width:700px;
+    margin:auto;
+    background:#fff;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,.1);
+}
+
+h1{
+    text-align:center;
+    margin-top:0;
+}
+
+label{
+    display:block;
+    margin-top:15px;
+    margin-bottom:6px;
+    font-weight:bold;
+}
+
+select,
+input[type=file]{
+    width:100%;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+button{
+    cursor:pointer;
+    border:none;
+    border-radius:6px;
+    padding:12px 18px;
+    font-size:15px;
+}
+
+#lockBtn{
+    margin-top:10px;
+    background:#ff9800;
+    color:white;
+}
+
+#uploadBtn{
+    width:100%;
+    margin-top:20px;
+    background:#2196f3;
+    color:white;
+}
+
+#uploadBtn:hover{
+    opacity:.9;
+}
+
+.locked{
+    background:#ececec;
+}
+
+.progress-wrapper{
+    margin-top:15px;
+    display:none;
+}
+
+progress{
+    width:100%;
+    height:24px;
+}
+
+.status{
+    margin-top:15px;
+    padding:10px;
+    border-radius:6px;
+    display:none;
+}
+
+.success{
+    background:#d4edda;
+    color:#155724;
+}
+
+.error{
+    background:#f8d7da;
+    color:#721c24;
+}
+
+.info{
+    background:#e7f3ff;
+    color:#0c5460;
+}
+
+.small{
+    font-size:13px;
+    color:#666;
+}
 </style>
 </head>
-
 <body>
 
-<h2>Damage Recorder</h2>
+<div class="container">
 
-<select id="parent">
-  <option value="1">Damage Form [1]</option>
-  <option value="2">Damage Form [2]</option>
-</select>
+    <h1>Damage Upload Form</h1>
 
-<input id="barcode" placeholder="Scan barcode" readonly>
+    <label>Destination Folder</label>
 
-<button onclick="scanBarcode()">Scan Barcode</button>
+    <select id="folderSelect">
+        <option value="1">Damage Form [1]</option>
+        <option value="2">Damage Form [2]</option>
+    </select>
 
-<div id="reader"></div>
+    <button id="lockBtn">🔒 Lock Selection</button>
 
-<hr>
+    <div class="small">
+        Folder selection can be locked and will remain after refresh.
+    </div>
 
-<video id="preview" autoplay playsinline muted></video>
+    <label>Select File</label>
+    <input type="file" id="fileInput">
 
-<button onclick="startRecording()">Start</button>
-<button onclick="stopRecording()">Stop</button>
-<button onclick="save()">Save</button>
+    <button id="uploadBtn">
+        Upload File
+    </button>
 
-<hr>
+    <div class="progress-wrapper" id="progressWrapper">
+        <progress id="progressBar" value="0" max="100"></progress>
+    </div>
 
-<div id="status"></div>
-<div id="queueInfo"></div>
+    <div id="status" class="status"></div>
+
+</div>
 
 <script>
 
-const SCRIPT_URL = "https://script.google.com/a/macros/shopeemobile-external.com/s/AKfycbw9UFT3KNSwRfXu1kE-p9UCPQuqq0LOWIp1WVmUmedqFM8Fc9pTwg1oy4jUNkIpXuPI/exec";
+const SCRIPT_URL =
+"https://script.google.com/macros/s/AKfycbxY4JKOrVwsgkcLBNLnfM8erlcrT-YFq6gAazH1j0H_6qzD6IgoPyXlRW7rHBnJOaEM/exec";
 
-// ---------------- IndexedDB ----------------
+const folderSelect = document.getElementById("folderSelect");
+const lockBtn = document.getElementById("lockBtn");
+const uploadBtn = document.getElementById("uploadBtn");
 
-const DB_NAME = "damage_queue";
-let db;
+function showStatus(message,type){
 
-function openDB() {
-  return new Promise((resolve) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const status = document.getElementById("status");
 
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      db.createObjectStore("queue", { keyPath: "id", autoIncrement: true });
-    };
-
-    req.onsuccess = e => {
-      db = e.target.result;
-      resolve(db);
-    };
-  });
+    status.style.display = "block";
+    status.className = "status " + type;
+    status.innerHTML = message;
 }
 
-function addDB(item) {
-  const tx = db.transaction("queue", "readwrite");
-  tx.objectStore("queue").add(item);
+function saveFolder(){
+    localStorage.setItem(
+        "selectedFolder",
+        folderSelect.value
+    );
 }
 
-function getAllDB() {
-  return new Promise(resolve => {
-    const tx = db.transaction("queue", "readonly");
-    const req = tx.objectStore("queue").getAll();
-    req.onsuccess = () => resolve(req.result);
-  });
-}
+function loadSettings(){
 
-function deleteDB(id) {
-  const tx = db.transaction("queue", "readwrite");
-  tx.objectStore("queue").delete(id);
-}
+    const folder =
+        localStorage.getItem("selectedFolder");
 
-// ---------------- STATE ----------------
+    const locked =
+        localStorage.getItem("folderLocked");
 
-let scanner;
-let recorder;
-let stream;
-let chunks = [];
-let blob = null;
-let uploading = false;
-
-// ---------------- INIT ----------------
-
-openDB().then(processQueue);
-
-// ---------------- UI ----------------
-
-function setStatus(t) {
-  document.getElementById("status").innerText = t;
-}
-
-// ---------------- BARCODE ----------------
-
-function scanBarcode() {
-
-  document.getElementById("reader").innerHTML = "";
-
-  scanner = new Html5Qrcode("reader");
-
-  Html5Qrcode.getCameras().then(cams => {
-
-    const cam = cams[cams.length - 1].id;
-
-    scanner.start(cam, { fps: 10, qrbox: 250 }, text => {
-
-      document.getElementById("barcode").value = text;
-
-      scanner.stop();
-      document.getElementById("reader").innerHTML = "";
-
-    });
-
-  });
-
-}
-
-// ---------------- RECORD ----------------
-
-async function startRecording() {
-
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment", width: 640, height: 480 },
-    audio: true
-  });
-
-  document.getElementById("preview").srcObject = stream;
-
-  recorder = new MediaRecorder(stream, {
-    mimeType: "video/webm;codecs=vp8",
-    videoBitsPerSecond: 300000
-  });
-
-  chunks = [];
-
-  recorder.ondataavailable = e => chunks.push(e.data);
-
-  recorder.start();
-
-  setStatus("Recording...");
-}
-
-function stopRecording() {
-
-  return new Promise(resolve => {
-
-    recorder.onstop = () => {
-
-      blob = new Blob(chunks, { type: "video/webm" });
-
-      stream.getTracks().forEach(t => t.stop());
-
-      setStatus("Ready");
-
-      resolve();
-    };
-
-    recorder.stop();
-  });
-
-}
-
-// ---------------- SAVE ----------------
-
-async function save() {
-
-  const barcode = document.getElementById("barcode").value;
-  const parent = document.getElementById("parent").value;
-
-  if (!barcode || !blob) return alert("Missing data");
-
-  addDB({
-    barcode,
-    parent,
-    blob,
-    retries: 0,
-    time: Date.now()
-  });
-
-  blob = null;
-  document.getElementById("barcode").value = "";
-
-  setStatus("Saved ✔");
-
-  processQueue();
-}
-
-// ---------------- BASE64 ----------------
-
-function blobToBase64(blob) {
-  return new Promise(res => {
-    const r = new FileReader();
-    r.onloadend = () => res(r.result.split(",")[1]);
-    r.readAsDataURL(blob);
-  });
-}
-
-// ---------------- UPLOAD ----------------
-
-async function uploadItem(item) {
-
-  const base64 = await blobToBase64(item.blob);
-
-  const res = await fetch(SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      barcode: item.barcode,
-      parent: item.parent,
-      file: base64
-    })
-  });
-
-  const text = await res.text();
-
-  if (text !== "OK") throw new Error(text);
-}
-
-// ---------------- QUEUE ENGINE ----------------
-
-async function processQueue() {
-
-  if (uploading) return;
-  uploading = true;
-
-  while (true) {
-
-    const items = await getAllDB();
-    if (items.length === 0) break;
-
-    const item = items[0];
-
-    try {
-
-      setStatus("Uploading...");
-
-      await uploadItem(item);
-
-      deleteDB(item.id);
-
-      setStatus("Uploaded ✔");
-
-    } catch (e) {
-
-      item.retries++;
-
-      if (item.retries > 5) {
-        deleteDB(item.id);
-        setStatus("Dropped failed item");
-      } else {
-        await new Promise(r => setTimeout(r, 2000 * item.retries));
-      }
+    if(folder){
+        folderSelect.value = folder;
     }
-  }
 
-  uploading = false;
-  setStatus("Idle");
+    if(locked === "true"){
+        lockFolder();
+    }
 }
 
+function lockFolder(){
+
+    folderSelect.disabled = true;
+    folderSelect.classList.add("locked");
+
+    lockBtn.textContent =
+        "🔓 Unlock Selection";
+
+    localStorage.setItem(
+        "folderLocked",
+        "true"
+    );
+
+    saveFolder();
+}
+
+function unlockFolder(){
+
+    folderSelect.disabled = false;
+    folderSelect.classList.remove("locked");
+
+    lockBtn.textContent =
+        "🔒 Lock Selection";
+
+    localStorage.setItem(
+        "folderLocked",
+        "false"
+    );
+}
+
+lockBtn.addEventListener("click",()=>{
+
+    if(folderSelect.disabled){
+        unlockFolder();
+    }else{
+        lockFolder();
+    }
+
+});
+
+folderSelect.addEventListener(
+    "change",
+    saveFolder
+);
+
+loadSettings();
+
+uploadBtn.addEventListener(
+    "click",
+    uploadFile
+);
+
+function uploadFile(){
+
+    const file =
+        document.getElementById(
+            "fileInput"
+        ).files[0];
+
+    if(!file){
+
+        showStatus(
+            "Please select a file first.",
+            "error"
+        );
+
+        return;
+    }
+
+    showStatus(
+        "Preparing upload...",
+        "info"
+    );
+
+    document.getElementById(
+        "progressWrapper"
+    ).style.display = "block";
+
+    document.getElementById(
+        "progressBar"
+    ).value = 20;
+
+    const reader = new FileReader();
+
+    reader.onload = async function(event){
+
+        try{
+
+            const base64 =
+                event.target.result
+                .split(",")[1];
+
+            document.getElementById(
+                "progressBar"
+            ).value = 60;
+
+            const response =
+                await fetch(
+                    SCRIPT_URL,
+                    {
+                        method:"POST",
+                        body:JSON.stringify({
+
+                            folder:
+                                folderSelect.value,
+
+                            fileName:
+                                file.name,
+
+                            mimeType:
+                                file.type ||
+                                "application/octet-stream",
+
+                            fileData:
+                                base64
+                        })
+                    }
+                );
+
+            const result =
+                await response.json();
+
+            document.getElementById(
+                "progressBar"
+            ).value = 100;
+
+            if(result.success){
+
+                showStatus(
+                    `
+                    ✅ Upload Successful<br><br>
+                    <a href="${result.url}" target="_blank">
+                    Open Uploaded File
+                    </a>
+                    `,
+                    "success"
+                );
+
+                document.getElementById(
+                    "fileInput"
+                ).value = "";
+
+            }else{
+
+                showStatus(
+                    result.error ||
+                    "Upload failed.",
+                    "error"
+                );
+            }
+
+        }catch(error){
+
+            showStatus(
+                error.message,
+                "error"
+            );
+        }
+    };
+
+    reader.readAsDataURL(file);
+}
 </script>
 
 </body>
