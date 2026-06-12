@@ -55,7 +55,98 @@ video{
 </style>
 </head>
 <body>
+<div id="scannerModal" style="
+display:none;
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,.85);
+z-index:9999;
+">
 
+  <div style="
+  background:white;
+  margin:20px;
+  padding:15px;
+  border-radius:10px;
+  ">
+
+    <h3>Scan Barcode</h3>
+
+    <div id="reader"></div>
+
+    <br>
+
+let scanner;
+
+document
+.getElementById("scanBtn")
+.addEventListener("click", startScanner);
+
+async function startScanner() {
+
+    document
+    .getElementById("scannerModal")
+    .style.display = "block";
+
+    scanner = new Html5Qrcode("reader");
+
+    try {
+
+        await scanner.start(
+            {
+                facingMode: "environment"
+            },
+            {
+                fps: 10,
+                qrbox: 250
+            },
+            onScanSuccess
+        );
+
+    } catch (err) {
+
+        alert(
+            "Cannot access camera.\n" +
+            err
+        );
+
+        closeScanner();
+    }
+}
+
+async function onScanSuccess(decodedText) {
+
+    document
+    .getElementById("folderName")
+    .value = decodedText;
+
+    await closeScanner();
+}
+
+async function closeScanner() {
+
+    if (scanner) {
+
+        try {
+            await scanner.stop();
+        } catch(e){}
+
+        try {
+            scanner.clear();
+        } catch(e){}
+    }
+
+    document
+    .getElementById("scannerModal")
+    .style.display = "none";
+}
+
+  </div>
+</div>
+    
 <h2>Damage Video Upload</h2>
 
 <div class="row">
@@ -375,6 +466,6 @@ document
 };
 
 </script>
-
+<script src="https://unpkg.com/html5-qrcode"></script>
 </body>
 </html>
