@@ -1,81 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script src="https://unpkg.com/html5-qrcode"></script>
-  <script>
-
-let scanner;
-
-function scanBarcode() {
-
-  document
-    .getElementById("reader")
-    .innerHTML = "";
-
-  scanner =
-    new Html5Qrcode("reader");
-
-  Html5Qrcode.getCameras()
-    .then(cameras => {
-
-      if (!cameras.length) {
-
-        alert("No camera found");
-
-        return;
-
-      }
-
-      const cameraId =
-        cameras[cameras.length - 1].id;
-
-      scanner.start(
-        cameraId,
-        {
-          fps:10,
-          qrbox:250
-        },
-        decodedText => {
-
-          document
-            .getElementById("barcode")
-            .value =
-            decodedText;
-
-          scanner.stop();
-
-          document
-            .getElementById("reader")
-            .innerHTML = "";
-
-        }
-      );
-
-    });
-
-}
-
-</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <title>Damage Recorder</title>
 
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <style>
-body{
-  font-family:Arial;
-  padding:20px;
-}
-
-button{
-  width:100%;
-  padding:15px;
-  font-size:18px;
-}
-
-video{
-  width:100%;
-  margin-top:15px;
-}
+body { font-family: Arial; padding: 15px; }
+button, select, input { width: 100%; padding: 12px; margin: 6px 0; }
+video { width: 100%; margin-top: 10px; }
+#reader { width: 100%; }
 </style>
 </head>
 
@@ -88,20 +23,207 @@ video{
   <option value="2">Damage Form [2]</option>
 </select>
 
-<br><br>
+<input id="barcode" placeholder="Scan Barcode" readonly>
 
-<input
-  id="barcode"
-  readonly
-  placeholder="Scan barcode first">
-
-<br><br>
-
-<button onclick="scanBarcode()">
-  Scan Barcode
-</button>
+<button onclick="scanBarcode()">Scan Barcode</button>
 
 <div id="reader"></div>
+
+<hr>
+
+<video id="preview" autoplay playsinline muted></video>
+
+<button onclick="startRecording()">Start Recording</button>
+<button onclick="stopRecording()">Stop + Compress</button>
+<button onclick="upload()">Upload</button>
+
+<div id="status"></div>
+
+<script>
+
+const SCRIPT_URL = "YOUR_APPS_SCRIPT_URL_HERE";
+
+let scanner;
+let recorder;
+let chunks = [];
+let recordedBlob = null;
+
+let stream;
+
+// -------------------- BARCODE --------------------
+
+function scanBarcode() {
+
+  document.getElementById("reader").innerHTML = "";
+
+  scanner = new Html5Qrcode("reader");
+
+  Html5Qrcode.getCameras().then(cameras => {
+
+    const camId = cameras[cameras.length - 1].id;
+
+    scanner.start(
+      camId,
+      { fps: 10, qrbox: 250 },
+      text => {
+
+        document.getElementById("barcode").value = text;
+
+        scanner.stop();
+        document.getElementById("reader").innerHTML = "";
+
+      }
+    );
+
+  });
+
+}
+
+// -------------------- RECORD --------------------
+
+async function startRecording() {
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "environment",
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    },
+    audio: true
+  });
+
+  document.getElementById("preview").srcObject = stream;
+
+  recorder = new MediaRecorder(stream, {
+    mimeType: "video/webm;codecs=vp8",
+    videoBitsPerSecond: 300000   // LOW bitrate = small file
+  });
+
+  chunks = [];
+
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.start();
+
+  setStatus("Recording...");
+}
+
+// -------------------- STOP + COMPRESS --------------------
+
+function stopRecording() {
+
+  return new Promise(resolve => {
+
+    recorder.onstop = async () => {
+
+      let blob = new Blob(chunks, { type: "video/webm" });
+
+      setStatus("Compressing...");
+
+      recordedBlob = await forceCompress(blob);
+
+      stream.getTracks().forEach(t => t.stop());
+
+      setStatus("Ready to upload (size: " +
+        (recordedBlob.size / 1024 / 1024).toFixed(2) + " MB)");
+
+      resolve();
+    };
+
+    recorder.stop();
+  });
+}
+
+// -------------------- SIMPLE COMPRESSION --------------------
+// NOTE: true re-encode not possible in pure browser without heavy libs
+// we simulate compression by re-encoding via video element
+
+async function forceCompress(blob) {
+
+  const video = document.createElement("video");
+  video.src = URL.createObjectURL(blob);
+  await video.play();
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 640;
+  canvas.height = 480;
+
+  const ctx = canvas.getContext("2d");
+
+  const stream = canvas.captureStream(15); // 15 FPS output
+
+  const rec = new MediaRecorder(stream, {
+    mimeType: "video/webm;codecs=vp8",
+    videoBitsPerSecond: 250000
+  });
+
+  let chunks = [];
+
+  rec.ondataavailable = e => chunks.push(e.data);
+
+  rec.start();
+
+  const draw = () => {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (!video.ended) requestAnimationFrame(draw);
+    else rec.stop();
+  };
+
+  draw();
+
+  return new Promise(resolve => {
+
+    rec.onstop = () => {
+      resolve(new Blob(chunks, { type: "video/webm" }));
+    };
+
+  });
+
+}
+
+// -------------------- UPLOAD --------------------
+
+function upload() {
+
+  const barcode = document.getElementById("barcode").value;
+  const parent = document.getElementById("parent").value;
+
+  if (!barcode || !recordedBlob) {
+    alert("Missing data");
+    return;
+  }
+
+  setStatus("Uploading...");
+
+  const form = new FormData();
+
+  form.append("file", recordedBlob, "Unboxing.mp4");
+  form.append("barcode", barcode);
+  form.append("parent", parent);
+
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    body: form
+  })
+  .then(r => r.text())
+  .then(res => {
+    setStatus("Uploaded ✔");
+    console.log(res);
+  })
+  .catch(err => {
+    setStatus("Upload failed ❌");
+    console.error(err);
+  });
+
+}
+
+// -------------------- UI --------------------
+
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
+}
+
+</script>
 
 </body>
 </html>
